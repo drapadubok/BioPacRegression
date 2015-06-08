@@ -36,6 +36,7 @@ subjects = {
 'Emo_listening_19_2'
 };
 
+
 %% Biopac settings, these are setup according to the template that Dima and Heini use
 % Which channels were active 1 - active, 0 - not active
 biopacfile.CH1=1; %usually breath data from belt
