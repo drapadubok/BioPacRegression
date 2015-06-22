@@ -5,7 +5,7 @@ NRUN = 5;
 NTR = 350;
 
 % load regressors - valence and arousal data
-load('/triton/becs/scratch/braindata/shared/2pnhyperEMO/isps_regressors.mat'); % finARO, finVAL and tempreg
+load('/triton/becs/scratch/braindata/shared/2pnhyperEMO/BioPacTesting/val_aro.mat'); % ARO, VAL and tempreg
 
 % load biopac data preprocessed with DRIFTER
 load('/triton/becs/scratch/braindata/shared/2pnhyperEMO/BioPacTesting/biopac_data.mat'); % breath and heartrate
@@ -34,6 +34,7 @@ subjects = {
 'Emo_listening_17_2';
 };
 
+
 % drop last two subjects, as we don't have behavioral data for them
 % and listening_14, as they have less data (maybe biopac turned off in the
 % course of scanning)
@@ -48,35 +49,48 @@ val = zeros(length(subjects),1015);
 for s = 1:length(subjects)
     temp_br = [];
     temp_hr = [];
-%     try
-        for r = 1:NRUN
-            % breath
-            tempfreq = breath{s,r}.frequency;
-            dtempfreq = resample(tempfreq,1,170);
-            dtempfreq = dtempfreq(1:NTR);
-            temp_br = cat(2,temp_br,dtempfreq);
-            % heartrate
-            tempfreq = heartrate{s,r}.frequency;
-            dtempfreq = resample(tempfreq,1,170);
-            dtempfreq = dtempfreq(1:NTR);
-            temp_hr = cat(2,temp_hr,dtempfreq);
-        end
-%     catch
-%         disp(subjects{s})
-%     end
-    br(s,:) = temp_br(find(tempreg));
-    hr(s,:) = temp_hr(find(tempreg));
     
-    % unpack behavior
-    val(s,:) = finVAL{s}(find(tempreg));
-    aro(s,:) = finARO{s}(find(tempreg));
+    %% prepro arousal
+    TR=1.7;
+    sample=0.2; %200ms, 5 times per sec
+    TRms=TR*10; % Tenth of second
+    samplems=sample*10;
+    % 1) zscore
+    taro = zscore(ARO{s});
+    % 2) downsample
+    taro = resample(taro,samplems,TRms);
+    % 3) zscore again
+    taro = zscore(taro);
+    aro(s,:) = taro(find(tempreg));
+    
+    %% prepro valence
+    % 1) zscore
+    tval = zscore(VAL{s});
+    % 2) downsample
+    tval = resample(tval,samplems,TRms);
+    % 3) zscore again
+    tval = zscore(tval);
+    val(s,:) = tval(find(tempreg));
+
+    
+    for r = 1:NRUN
+        % breath
+        tempfreq = breath{s,r}.frequency;
+        dtempfreq = resample(tempfreq,1,170);
+        dtempfreq = dtempfreq(1:NTR);
+        temp_br = cat(2,temp_br,dtempfreq);
+        % heartrate
+        tempfreq = heartrate{s,r}.frequency;
+        dtempfreq = resample(tempfreq,1,170);
+        dtempfreq = dtempfreq(1:NTR);
+        temp_hr = cat(2,temp_hr,dtempfreq);
+    end    
+    br(s,:) = zscore(temp_br(find(tempreg)),[],2);
+    hr(s,:) = zscore(temp_hr(find(tempreg)),[],2);
+    
 end
 
 %% Run correlation
-load('biopac_data.mat')
-load('data_processed.mat')
-br = zscore(br,[],2);
-hr = zscore(hr,[],2);
 addpath(genpath('/triton/becs/scratch/braindata/shared/toolboxes/bramila/bramila/'));
 % run correlation
 for s = 1:length(subjects)
@@ -105,13 +119,26 @@ for s = 1:length(subjects)
 end
 %% Get group p value
 % PERMUTATION
-data = corr_pval_hr_val;
+data = rho_hr_val;
 permnum = 5000;
+[corrsum,permdist,permmap] = sum_sign_permutator(data,permnum);
+hist(permdist);
+thresh = prctile(permdist,[5 95]);
+mean(permdist > corrsum);
 
-function permdist = correlation_sign_permutator(data,permnum)
+% 
+function [corrsum,permdist,permmap] = sum_sign_permutator(data,permnum)
+% Parameters:
+% data - vector of values to sum
+% permnum - number of permutations
+% Output:
+% corrsum - sum of unpermuted data
+% permdist - permutation sums
+% permmap - map of permutations (to reproduce)
+
 % Get real correlation sum
 corrsum = sum(data);
-% Auxilary variables
+
 permlen = length(data);
 permmap = zeros(permlen,permnum);
 for p = 1:permnum
@@ -125,10 +152,5 @@ for p = 1:permnum
     permcorr = data.*permmap(:,p);
     permdist(p) = sum(permcorr);
 end
-hist(permdist);
-thresh = prctile(permdist,[5 95]);
-mean(permdist > corrsum);
-
-
 
 
