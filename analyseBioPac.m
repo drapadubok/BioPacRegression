@@ -73,12 +73,62 @@ for s = 1:length(subjects)
 end
 
 %% Run correlation
-% run correlation, look how it is on average, what are the maximums and minimums
-plot(br(1,:),aro(1,:),'.')
-[rho,pval] = corr(br(1,:)',aro(1,:)','Type','Spearman');
+load('biopac_data.mat')
+load('data_processed.mat')
+br = zscore(br,[],2);
+hr = zscore(hr,[],2);
+addpath(genpath('/triton/becs/scratch/braindata/shared/toolboxes/bramila/bramila/'));
+% run correlation
+for s = 1:length(subjects)
+    % Breath and arousal
+    % Get rho and pval
+    [rho_br_aro(s,1),pval_br_aro] = corr(br(s,:)',aro(s,:)','Type','Spearman');
+    % Get adjusted df
+    newdf_br_aro = bramila_autocorr(br(s,:)',aro(s,:)');
+    % Get adjusted pval
+    corr_pval_br_aro(s,1) = pvalPearson('b',rho_br_aro(s,1),newdf_br_aro);
+    
+    % Breath and valence
+    [rho_br_val(s,1),pval_br_val] = corr(br(s,:)',val(s,:)','Type','Spearman');
+    newdf_br_val = bramila_autocorr(br(s,:)',val(s,:)');
+    corr_pval_br_val(s,1) = pvalPearson('b',rho_br_val(s,1),newdf_br_val);
+    
+    % Heartrate and arousal
+    [rho_hr_aro(s,1),pval_hr_aro] = corr(hr(s,:)',aro(s,:)','Type','Spearman');
+    newdf_hr_aro = bramila_autocorr(hr(s,:)',aro(s,:)');
+    corr_pval_hr_aro(s,1) = pvalPearson('b',rho_hr_aro(s,1),newdf_hr_aro);
+    
+    % Heartrate and valence
+    [rho_hr_val(s,1),pval_hr_val] = corr(hr(s,:)',val(s,:)','Type','Spearman');
+    newdf_hr_val = bramila_autocorr(hr(s,:)',val(s,:)');
+    corr_pval_hr_val(s,1) = pvalPearson('b',rho_hr_val(s,1),newdf_hr_val);
+end
+%% Get group p value
+% PERMUTATION
+data = corr_pval_hr_val;
+permnum = 5000;
 
+function permdist = correlation_sign_permutator(data,permnum)
+% Get real correlation sum
+corrsum = sum(data);
+% Auxilary variables
+permlen = length(data);
+permmap = zeros(permlen,permnum);
+for p = 1:permnum
+    % store the permutation
+    tperm = ones(permlen,1);
+    iperm = randi([0 1],permlen,1) * -2;
+    tperm = tperm + iperm;
+    permmap(:,p) = tperm;
+    
+    % get correlation sum
+    permcorr = data.*permmap(:,p);
+    permdist(p) = sum(permcorr);
+end
+hist(permdist);
+thresh = prctile(permdist,[5 95]);
+mean(permdist > corrsum);
 
-%% Probably some sort of autocorrelation model makes more sense, as we want to check if frequency increases every time the signal in aro or val starts to change
 
 
 
